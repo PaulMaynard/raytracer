@@ -1,0 +1,9 @@
+{
+    "compilerOptions": {
+        "strict": true,
+        "outDir": "out",
+        "sourceMap": true,
+        "target": "ES6",
+    },
+    "include": ["src/**/*"],
+}
