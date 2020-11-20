@@ -28,6 +28,16 @@ function dot(a, b) {
 function sq(a) {
     return dot(a, a);
 }
+function average(colors) {
+    let sum = [0, 0, 0, 0];
+    for (let c of colors) {
+        sum[0] += c[0];
+        sum[1] += c[1];
+        sum[2] += c[2];
+        sum[3] += c[3];
+    }
+    return sum;
+}
 let scene = {
     iterations: 10,
     camera: [
@@ -117,7 +127,8 @@ function getColor(ray, iters, exclude) {
     let ic = cast(ray, exclude);
     if (!ic) {
         // TODO: lighting (specular)
-        return [...ray[1].map(c => (Math.tanh(c) + 1) / 2), 1];
+        let mag = Math.sqrt(sq(ray[1]));
+        return [...add(mul(1 / (2 * mag), ray[1]), [.5, .5, .5]), 1];
     }
     let [intercept, shape] = ic;
     let normal = sub(intercept, shape.center);
