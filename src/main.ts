@@ -39,14 +39,13 @@ interface Ball {
     radius: number;
 }
 
-type Color = [number, number, number, number];
+type Color = [number, number, number];
 function average(colors: Color[]) {
-    let sum: Color = [0, 0, 0, 0];
+    let sum: Color = [0, 0, 0];
     for (let c of colors) {
         sum[0] += c[0];
         sum[1] += c[1];
         sum[2] += c[2];
-        sum[3] += c[3];
     }
     return sum;
 }
@@ -58,18 +57,20 @@ interface Material {
 type Shape = Ball & Material;
 
 interface Scene {
-    iterations: number
+    iterations: number;
     camera: Ray;
     light: Pos;
+    background: Color;
     shapes: Shape[]
 }
 
 let scene: Scene = {
-    iterations: 10,
+    iterations: 5,
     camera: [
         [0, 0, -1],
         [0, 0, 1]
     ],
+    background: [0, 0, 0],
     light: [10, 10, -10],
     shapes: [
         {
@@ -77,23 +78,15 @@ let scene: Scene = {
             radius: 4,
         },
         {
-            center: [-1, -1, 2.5],
+            center: [-1, -1, 2],
             radius: .8,
         },
         {
-            center: [1, -1, 2.5],
+            center: [1, -1, 1],
             radius: .8,
         },
         {
-            center: [0, 1.2, 2.2],
-            radius: .5,
-        },
-        {
-            center: [.8, 1, 2.2],
-            radius: .5,
-        },
-        {
-            center: [-.8, 1, 2.2],
+            center: [0, 1.2, 1],
             radius: .5,
         },
     ],
@@ -101,11 +94,11 @@ let scene: Scene = {
 
 
 let canvas = document.createElement('canvas');
-canvas.width = 500;
-canvas.height = 500;
+canvas.width = 300;
+canvas.height = 300;
 
 document.documentElement.appendChild(canvas);
-let ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d');
 if (ctx == null) {
     throw Error("could not get context");
 }
@@ -116,14 +109,15 @@ function set(x: number, y: number, color: Color): void {
     color.forEach((c, j) => {
         data.data[i + j] = Math.floor(c * 256);
     });
+    data.data[i + 3] = 255;
 }
 
 let w = canvas.width;
 let h = canvas.height;
 
 // bad grid math - only works pointing along z
-let dx: Pos = [.005, 0, 0];
-let dy: Pos = [0, .005, 0];
+let dx: Pos = [.007, 0, 0];
+let dy: Pos = [0, .007, 0];
 let start: Pos = add(add(scene.camera[1], mul(-w / 2, dx)), mul(-h / 2, dy));
 
 function cast(ray: Ray, exclude?: Shape): [Pos, Shape] | void {
@@ -164,7 +158,7 @@ function getColor(ray: Ray, iters: number, exclude?: Shape): Color | null {
     if (!ic) {
         // TODO: lighting (specular)
         let mag = Math.sqrt(sq(ray[1]));
-        return <Color> [...add(mul(1/(2*mag), ray[1]), [.5, .5, .5]), 1];
+        return add(mul(1/(2*mag), ray[1]), [.5, .5, .5]);
     }
     let [intercept, shape] = ic;
     let normal = sub(intercept, shape.center);
@@ -183,24 +177,39 @@ function getColor(ray: Ray, iters: number, exclude?: Shape): Color | null {
         }
     }    
     // TODO: lighting (ambient)
-    return <Color> [...ray[1].map(n => n > 0 ? 1 : 0), 1];
+    return <Color> [...ray[1].map(n => n > 0 ? 1 : 0)];
 }
 
-for (let i = 0; i < w; i++) {
-    for (let j = 0; j < h; j++) {
-        let dir: Pos = [
-            start[0] + i * dx[0] + j * dy[0],
-            start[1] + i * dx[1] + j * dy[1],
-            start[2] + i * dx[2] + j * dy[2],
-        ];
-        // just check if there is an intersection
-        let color = getColor([scene.camera[0], dir], scene.iterations);
-        if (color) {
-            set(i, j, color);
+let last = 0
+function render(t) {
+    // if (t - last < 100) {
+    //     requestAnimationFrame(render);
+    //     return;
+    // }
+    // console.log(t)
+    last = t;
+    // console.log(t)
+    scene.shapes[3].center = [Math.cos(t / 2500), Math.sin(t / 2500), .5]
+    // scene.shapes[1].center = [-1, -1, 2 - .5 * Math.sin(t / 5000)]
+
+    for (let i = 0; i < w; i++) {
+        for (let j = 0; j < h; j++) {
+            let dir: Pos = [
+                start[0] + i * dx[0] + j * dy[0],
+                start[1] + i * dx[1] + j * dy[1],
+                start[2] + i * dx[2] + j * dy[2],
+            ];
+            // just check if there is an intersection
+            let color = getColor([scene.camera[0], dir], scene.iterations);
+            if (color) {
+                set(i, j, color);
+            }
+            
         }
-        
+        ctx.putImageData(data, 0, 0);
     }
-    ctx.putImageData(data, 0, 0);
-}
 
-ctx.putImageData(data, 0, 0);
+    ctx.putImageData(data, 0, 0);
+    requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
