@@ -29,7 +29,21 @@ export function dot(a: Point, b: Point): number {
     );
 }
 export function sq(a: Point): number {
-    return dot(a, a)
+    return dot(a, a);
 }
 
-export type Ray = [Point, Point];
+export function mag(a: Point): number {
+    return Math.sqrt(sq(a));
+}
+
+export function norm(a: Point): Point {
+    return mul(1 / mag(a), a);
+}
+
+// export function cross(a: Point, b: Point): Point {
+//     return [
+
+//     ]
+// }
+
+export type Ray = [Point, Point] | [Point, Point, Point];

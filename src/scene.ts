@@ -16,7 +16,10 @@ export interface Ball {
 }
 
 export interface Material {
-
+    diffuse: Color;
+    shininess: number;
+    // specular: Color;
+    reflective: boolean;
 }
 
 export type Shape = Ball & Material;

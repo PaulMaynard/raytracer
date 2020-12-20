@@ -1,7 +1,7 @@
 import { Renderer } from "./renderer.js";
 import { Scene, Shape } from "./scene.js";
-import { Color } from "./color.js";
-import { Point, Ray, add, sub, mul, dot, sq } from "./point.js";
+import { Color, clamp } from "./color.js";
+import { Point, Ray, add, sub, mul, dot, sq, norm } from "./point.js";
 
 export default class CanvasRenderer implements Renderer {
     public canvas: HTMLCanvasElement;
@@ -26,18 +26,24 @@ export default class CanvasRenderer implements Renderer {
     render(scene: Scene) {
         const w = this.canvas.width;
         const h = this.canvas.height;
-        // bad grid math - only works pointing along z
-        let dx: Point = [.007, 0, 0];
-        let dy: Point = [0, .007, 0];
-        let start: Point = add(add(scene.camera[1], mul(-w / 2, dx)), mul(-h / 2, dy));
+        let dx: Point = norm([-scene.camera[1][2], 0, scene.camera[1][0]]);
+        let dy: Point = norm([
+            -scene.camera[1][1] * scene.camera[1][0],
+            scene.camera[0][0] * scene.camera[0][0] + scene.camera[1][2] * scene.camera[1][2],
+            -scene.camera[1][1] * scene.camera[1][2],
+        ]);
+        let start: Point = add(add(scene.camera[1], dx), dy);
+        console.log(start);
 
         for (let i = 0; i < w; i++) {
             for (let j = 0; j < h; j++) {
-                let dir: Point = [
-                    start[0] + i * dx[0] + j * dy[0],
-                    start[1] + i * dx[1] + j * dy[1],
-                    start[2] + i * dx[2] + j * dy[2],
-                ];
+                let dir: Point = add(
+                    start,
+                    add(
+                        mul(-2 * i / w, dx),
+                        mul(-2 * j / h, dy)
+                    )
+                )
                 // just check if there is an intersection
                 let color = getColor(scene, [scene.camera[0], dir], scene.iterations);
                 if (color) {
@@ -91,24 +97,35 @@ function getColor(scene: Scene, ray: Ray, iters: number, exclude?: Shape): Color
     if (!ic) {
         // TODO: lighting (specular)
         let mag = Math.sqrt(sq(ray[1]));
-        return add(mul(1/(2*mag), ray[1]), [.5, .5, .5]);
+        // return add(mul(1/(2*mag), ray[1]), [.5, .5, .5]);
+        return [0, 0, 0]
     }
     let [intercept, shape] = ic;
-    let normal = sub(intercept, shape.center);
+    let normal = norm(sub(intercept, shape.center));
 
-    if (iters > 0) {
-        let reflection = sub(
-            ray[1],
-            mul(
-                2 * dot(normal, ray[1]) / sq(normal),
-                normal
-            )
-        );
-        let color = getColor(scene, [intercept, reflection], iters-1, shape);
-        if (color) {
-            return color;
-        }
+    let reflectionColor: Color = [0, 0, 0];
+    let reflectionRay = sub(
+        ray[1],
+        mul(
+            2 * dot(normal, ray[1]) / sq(normal),
+            normal
+        )
+    );
+    if (iters > 0 && shape.reflective) {
+        // get reflection ray
+        reflectionColor = getColor(scene, [intercept, reflectionRay], iters-1, shape);
     }    
     // TODO: lighting (ambient)
-    return <Color> [...ray[1].map(n => n > 0 ? 1 : 0)];
+    let lightingColor: Color = [0, 0, 0];
+    let shadowRay = norm(sub(scene.light, intercept));
+    let shadowed = cast(scene, [intercept, shadowRay], shape);
+    if (!shadowed) {
+        let diffuse = clamp(mul(dot(shadowRay, normal), shape.diffuse));
+        // no specular colors for now
+        let shine = dot(norm(reflectionRay), shadowRay);
+        let specular: Color = shine > 0 ? clamp(mul(Math.pow(shine, shape.shininess), [1, 1, 1])) : [0, 0, 0];
+        lightingColor = add(diffuse, specular);
+    }
+
+    return add(reflectionColor, lightingColor);
 }

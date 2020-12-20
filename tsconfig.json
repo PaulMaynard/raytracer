@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-        // "strict": true,
+        "noImplicitAny": true,
         "outDir": "out",
         "sourceMap": true,
         "target": "ES6",
