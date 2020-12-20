@@ -25,12 +25,13 @@ function makeFragmentShader(scene: Scene): string {
         varying vec3 v_ray;
 
         uniform vec3 u_camera;
-        
+        uniform vec3 u_light;
 
         uniform struct Shape {
             vec3 center;
             float radius;
             vec3 diffuse;
+            float shininess;
         } u_shapes[${scene.shapes.length}];
 
 
@@ -55,31 +56,63 @@ function makeFragmentShader(scene: Scene): string {
             } else {
                 return 0.;
             }
-            // if (D >= 0.) {
-            //     return true;
-            // }
-            // return false;
+        }
+        
+        float cast_ray(in vec3 pos, in vec3 ray, in int exclude, out Shape shape, out int idx, out vec3 i_pos, out vec3 normal) {
+            float t = 0.;
+                
+            for (int i = 0; i < ${scene.shapes.length}; i++) {
+                if (i != exclude) {
+                    float t_i = intersection(pos, ray, u_shapes[i]);
+                    if (t_i > 0. && (t == 0. || t_i < t)) {
+                        t = t_i;
+                        shape = u_shapes[i];
+                        idx = i;
+                    }
+                }
+            }
+            i_pos = pos + t * ray;
+            normal = normalize(i_pos - shape.center);
+            return t;
+        }
+        float cast_ray(in vec3 pos, in vec3 ray, in int exclude) {
+            vec3 i_pos;
+            vec3 normal;
+            Shape shape;
+            int idx;
+            return cast_ray(pos, ray, exclude, shape, idx, i_pos, normal);
         }
 
         void main() {
             vec3 pos = u_camera;
-            vec3 ray = v_ray; // set up camera grid
+            vec3 ray = normalize(v_ray); // set up camera grid
 
             gl_FragColor = vec4(0, 0, 0, 1);
 
 
             // cast the ray and see if it hits anything
-            float t = 0.;
-            Shape chosen;
-            for (int i = 0; i < ${scene.shapes.length}; i++) {
-                float t_i = intersection(pos, ray, u_shapes[i]);
-                if (t_i > 0. && (t == 0. || t_i < t)) {
-                    t = t_i;
-                    chosen = u_shapes[i];
+            Shape shape;
+            int idx;
+            vec3 hit_pos;
+            vec3 normal;
+            float t = cast_ray(pos, ray, -1, shape, idx, hit_pos, normal);
+            if (t > 0.) { // ray hit shape
+                vec3 lighting = vec3(0, 0, 0);
+                vec3 shadow_ray = normalize(u_light - hit_pos);
+                vec3 reflection_ray = ray - 2. * dot(ray, normal) * normal;
+
+                // excude thr current shape from shadow calcs to avoid shadow acne
+                if (cast_ray(hit_pos, shadow_ray, idx) <= 0.) {
+                    vec3 diffuse = shape.diffuse * dot(normal, shadow_ray);
+
+                    // needed to calculate both specular and reflection
+                    float shine = dot(reflection_ray, shadow_ray);
+                    vec3 specular = shine > 0. ? pow(shine, shape.shininess) * vec3(1, 1, 1) : vec3(0, 0, 0);
+                    lighting = diffuse + specular;
                 }
-            }
-            if (t > 0.) {
-                gl_FragColor = vec4(.3 * t * chosen.diffuse, 1);
+
+
+                gl_FragColor = vec4(lighting, 1);
             }
 
         }
@@ -127,6 +160,7 @@ export default class WebGLRenderer implements Renderer {
         // camera setup
         let u_camera = gl.getUniformLocation(program, "u_camera");
         gl.uniform3fv(u_camera, scene.camera[0]);
+
         let dx: Point = norm([scene.camera[1][2], 0, -scene.camera[1][0]]);
         let dy: Point = norm([
             -scene.camera[1][1] * scene.camera[1][0],
@@ -147,6 +181,9 @@ export default class WebGLRenderer implements Renderer {
         // console.log(corners);
         gl.vertexAttribPointer(a_ray, 3, gl.FLOAT, false, 0, 0);
 
+        // light placement
+        let u_light = gl.getUniformLocation(program, "u_light");
+        gl.uniform3fv(u_light, scene.light);
 
         for (let i = 0; i < scene.shapes.length; i++) {
             let shape = scene.shapes[i];
@@ -154,6 +191,7 @@ export default class WebGLRenderer implements Renderer {
                 center: shape.center,
                 radius: shape.radius,
                 diffuse: shape.diffuse,
+                shininess: shape.shininess,
             })
         }
 

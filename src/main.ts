@@ -6,9 +6,9 @@ import { Renderer } from "./renderer.js";
 import { Scene, Shape } from "./scene.js";
 
 let scene: Scene = {
-    iterations: 5,
+    iterations: 0,
     camera: [
-        [1.5, 0, 1],
+        [3, 0, 1],
         [-1, 0, 0]
     ],
     background: [0, 0, 0],
