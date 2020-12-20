@@ -8,7 +8,7 @@ import { Scene, Shape } from "./scene.js";
 let scene: Scene = {
     iterations: 5,
     camera: [
-        [1, 0, 1],
+        [1.5, 0, 1],
         [-1, 0, 0]
     ],
     background: [0, 0, 0],

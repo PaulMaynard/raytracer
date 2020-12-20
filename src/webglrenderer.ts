@@ -30,11 +30,15 @@ function makeFragmentShader(scene: Scene): string {
         uniform struct Shape {
             vec3 center;
             float radius;
+            vec3 diffuse;
         } u_shapes[${scene.shapes.length}];
 
 
         float intersection(in vec3 pos, in vec3 ray, in Shape shape) {
             // solve quadratic formula for intersection
+            // solve for t
+            // |tv + p - c|^2 = r^2
+            // |v^2|t^2 + 2((p - c) * v)t + |p - c|^2 - r^2 = 0
 
             float a = dot(ray, ray);
             float b = 2. * dot(pos - shape.center, ray);
@@ -44,7 +48,7 @@ function makeFragmentShader(scene: Scene): string {
 
             float t1 = (-b - sqrt(D)) / (2. * a);
             float t2 = (-b + sqrt(D)) / (2. * a);
-            if (t1 > 0. && t1 > t2) {
+            if (t1 > 0. && t1 < t2) {
                 return t1;
             } else if (t2 > 0.) {
                 return t2;
@@ -65,10 +69,17 @@ function makeFragmentShader(scene: Scene): string {
 
 
             // cast the ray and see if it hits anything
+            float t = 0.;
+            Shape chosen;
             for (int i = 0; i < ${scene.shapes.length}; i++) {
-                if (intersection(pos, ray, u_shapes[i]) != 0.) {
-                    gl_FragColor = vec4(1, 1, 1, 1);
+                float t_i = intersection(pos, ray, u_shapes[i]);
+                if (t_i > 0. && (t == 0. || t_i < t)) {
+                    t = t_i;
+                    chosen = u_shapes[i];
                 }
+            }
+            if (t > 0.) {
+                gl_FragColor = vec4(.3 * t * chosen.diffuse, 1);
             }
 
         }
@@ -141,7 +152,8 @@ export default class WebGLRenderer implements Renderer {
             let shape = scene.shapes[i];
             uniformStruct(gl, program, `u_shapes[${i}]`, {
                 center: shape.center,
-                radius: shape.radius
+                radius: shape.radius,
+                diffuse: shape.diffuse,
             })
         }
 
