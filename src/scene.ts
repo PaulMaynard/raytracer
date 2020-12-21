@@ -19,7 +19,7 @@ export interface Material {
     diffuse: Color;
     shininess: number;
     // specular: Color;
-    reflective: boolean;
+    reflectivity: number;
 }
 
 export type Shape = Ball & Material;

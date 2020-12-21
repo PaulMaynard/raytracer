@@ -32,6 +32,7 @@ function makeFragmentShader(scene: Scene): string {
             float radius;
             vec3 diffuse;
             float shininess;
+            float reflectivity;
         } u_shapes[${scene.shapes.length}];
 
 
@@ -84,37 +85,56 @@ function makeFragmentShader(scene: Scene): string {
         }
 
         void main() {
+            // ray currently being cast. Gets updated in the loop for reflection rays
             vec3 pos = u_camera;
             vec3 ray = normalize(v_ray); // set up camera grid
 
-            gl_FragColor = vec4(0, 0, 0, 1);
+            // cumulative color of pixel, made up of contributions of each bounce
+            vec3 color = vec3(0, 0, 0);
 
+            // amount to reduce reflection by (product of each shape's reflectivity)
+            float reflection_factor = 1.;
 
-            // cast the ray and see if it hits anything
-            Shape shape;
-            int idx;
-            vec3 hit_pos;
-            vec3 normal;
-            float t = cast_ray(pos, ray, -1, shape, idx, hit_pos, normal);
-            if (t > 0.) { // ray hit shape
-                vec3 lighting = vec3(0, 0, 0);
-                vec3 shadow_ray = normalize(u_light - hit_pos);
-                vec3 reflection_ray = ray - 2. * dot(ray, normal) * normal;
+            // do not include the current shape in casting rays
+            // this means we can't have self-reflections, but shapes are convex so it doesn't matter
+            int exclude = -1;
 
-                // excude thr current shape from shadow calcs to avoid shadow acne
-                if (cast_ray(hit_pos, shadow_ray, idx) <= 0.) {
-                    vec3 diffuse = shape.diffuse * dot(normal, shadow_ray);
+            // do some number of times for reflections
+            for (int i = 0; i < ${scene.iterations}; i++) {
+                // cast the ray and see if it hits anything
+                Shape shape;
+                int idx;
+                vec3 hit_pos;
+                vec3 normal;
+                float t = cast_ray(pos, ray, exclude, shape, idx, hit_pos, normal);
+                if (t > 0.) { // ray hit shape
+                    vec3 lighting = vec3(0, 0, 0);
+                    vec3 shadow_ray = normalize(u_light - hit_pos);
+                    vec3 reflection_ray = ray - 2. * dot(ray, normal) * normal;
 
-                    // needed to calculate both specular and reflection
-                    float shine = dot(reflection_ray, shadow_ray);
-                    vec3 specular = shine > 0. ? pow(shine, shape.shininess) * vec3(1, 1, 1) : vec3(0, 0, 0);
-                    lighting = diffuse + specular;
+                    // excude the current shape from shadow calcs to avoid shadow acne
+                    if (cast_ray(hit_pos, shadow_ray, idx) <= 0.) {
+                        float diff = dot(normal, shadow_ray);
+                        if (diff > 0.) {
+                            vec3 diffuse = shape.diffuse * diff;
+    
+                            // needed to calculate both specular and reflection
+                            float shine = dot(reflection_ray, shadow_ray);
+                            vec3 specular = shine > 0. ? pow(shine, shape.shininess) * vec3(1, 1, 1) : vec3(0, 0, 0);
+                            lighting = diffuse + specular;
+                        }
+                    }
+                    color += reflection_factor * lighting;
+                    // set up for the next iteration to do reflection calculations:
+                    reflection_factor *= shape.reflectivity;
+                    pos = hit_pos;
+                    ray = reflection_ray;
+                    exclude = idx;
+                } else {
+                    break; // no shape hit, end loop (doesn't really end because of unrolling but whatever)
                 }
-
-
-                gl_FragColor = vec4(lighting, 1);
             }
-
+            gl_FragColor = vec4(color, 1);
         }
     `;
 }
@@ -192,6 +212,7 @@ export default class WebGLRenderer implements Renderer {
                 radius: shape.radius,
                 diffuse: shape.diffuse,
                 shininess: shape.shininess,
+                reflectivity: shape.reflectivity,
             })
         }
 

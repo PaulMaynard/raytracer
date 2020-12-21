@@ -111,9 +111,9 @@ function getColor(scene: Scene, ray: Ray, iters: number, exclude?: Shape): Color
             normal
         )
     );
-    if (iters > 0 && shape.reflective) {
+    if (iters > 0 && shape.reflectivity > 0) {
         // get reflection ray
-        reflectionColor = getColor(scene, [intercept, reflectionRay], iters-1, shape);
+        reflectionColor = mul(shape.reflectivity, getColor(scene, [intercept, reflectionRay], iters-1, shape));
     }    
     // TODO: lighting (ambient)
     let lightingColor: Color = [0, 0, 0];
