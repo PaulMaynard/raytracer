@@ -28,7 +28,7 @@ export function createShader(gl: WebGLRenderingContext, type: number, source: st
 }
 
 export interface Struct {
-    [key: string]: boolean | number | [number, number] | [number, number, number] | [number, number, number, number]
+    [key: string]: boolean | {int: number} | number | [number, number] | [number, number, number] | [number, number, number, number]
 };
 
 export function uniformStruct(gl: WebGLRenderingContext, program: WebGLProgram, name: string, struct: Struct) {
@@ -39,6 +39,8 @@ export function uniformStruct(gl: WebGLRenderingContext, program: WebGLProgram, 
             gl.uniform1i(loc, val ? 1 : 0);
         } else if (typeof val == 'number') {
             gl.uniform1f(loc, val);
+        } else if ('int' in val) {
+            gl.uniform1i(loc, val.int);
         } else if (val.length == 2) {
             gl.uniform2fv(loc, val);
         } else if (val.length == 3) {

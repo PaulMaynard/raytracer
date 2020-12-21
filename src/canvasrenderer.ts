@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Renderer } from "./renderer.js";
 import { Scene, Shape } from "./scene.js";
 import { Color, clamp } from "./color.js";

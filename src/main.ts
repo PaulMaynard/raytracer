@@ -1,6 +1,3 @@
-import { Point, add, sub, mul, dot, sq, Ray } from "./point.js";
-import { Color } from "./color.js"
-import CanvasRenderer from "./canvasrenderer.js"
 import WebGLRenderer from "./webglrenderer.js"
 import { Renderer } from "./renderer.js";
 import { Scene, Shape } from "./scene.js";
@@ -16,44 +13,40 @@ let scene: Scene = {
     shapes: [
         {
             shape: "Ball",
-            center: [1, 0, 6],
-            radius: 4,
-            diffuse: [0.2, 0.2, 0.2],
+            center: [0, 0, 4],
+            radius: 2,
+            diffuse: [0, 0.15, 0],
             shininess: 200,
-            reflectivity: 0.8,
+            specular: [1, 1, 1],
+            reflectivity: [0.4, 0.6, 0.6],
         },
         {
             shape: "Ball",
             center: [-1, -1, 2],
             radius: .8,
-            diffuse: [.2, 0, 0],
+            diffuse: [.15, 0, 0],
             shininess: 200,
-            reflectivity: 0.8
+            specular: [1, 1, 1],
+            reflectivity: [0.6, 0.4, 0.4],
         },
         {
             shape: "Ball",
-            center: [1, -1, 1],
-            radius: .8,
-            diffuse: [0, .2, 0],
-            shininess: 200,
-            reflectivity: 0.8,
-        },
-        {
-            shape: "Ball",
-            center: [0, 1.2, 1],
+            center: [1, .2, 1],
             radius: .5,
-            diffuse: [0, 0, .2],
+            diffuse: [0, 0, .15],
             shininess: 200,
-            reflectivity: 0.8,
+            specular: [1, 1, 1],
+            reflectivity: [0.4, 0.4, 0.6],
         },
         {
-            shape: "Ball",
-            center: [0, 0, .5],
-            radius: .2,
-            diffuse: [.2, .2, .2],
-            shininess: 200,
-            reflectivity: 0.8,
-        },
+            shape: "Plane",
+            center: [0, -3, 0],
+            normal: [0, 1, 0],
+            diffuse: [.5, .5, .5],
+            specular: [.1, .1, .1],
+            shininess: 1,
+            reflectivity: [0.4, 0.4, 0.4],
+        }
     ],
 }
 

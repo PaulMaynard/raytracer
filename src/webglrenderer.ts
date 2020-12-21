@@ -1,6 +1,6 @@
 import { Renderer } from "./renderer.js";
-import { Scene, Shape } from "./scene.js";
-import { createProgram, createShader, uniformStruct } from "./glutils.js"
+import { Scene } from "./scene.js";
+import { createProgram, createShader, uniformStruct, Struct } from "./glutils.js"
 import { Point, norm, add, mul } from "./point.js";
 
 // for syntax highlighting
@@ -27,35 +27,52 @@ function makeFragmentShader(scene: Scene): string {
         uniform vec3 u_camera;
         uniform vec3 u_light;
 
+        #define SPHERE 0
+        #define PLANE 1
         uniform struct Shape {
+            int shape;
             vec3 center;
             float radius;
+            vec3 normal;
             vec3 diffuse;
+            vec3 specular;
+            vec3 reflectivity;
             float shininess;
-            float reflectivity;
         } u_shapes[${scene.shapes.length}];
 
 
         float intersection(in vec3 pos, in vec3 ray, in Shape shape) {
-            // solve quadratic formula for intersection
-            // solve for t
-            // |tv + p - c|^2 = r^2
-            // |v^2|t^2 + 2((p - c) * v)t + |p - c|^2 - r^2 = 0
+            if (shape.shape == SPHERE) {
+                // solve quadratic formula for intersection
+                // solve for t
+                // |tv + p - c|^2 = r^2
+                // |v^2|t^2 + 2((p - c) * v)t + |p - c|^2 - r^2 = 0
 
-            float a = dot(ray, ray);
-            float b = 2. * dot(pos - shape.center, ray);
-            float c = dot(pos - shape.center, pos - shape.center) - shape.radius * shape.radius;
-            
-            float D = b*b - 4.*a*c;
+                float a = dot(ray, ray);
+                float b = 2. * dot(pos - shape.center, ray);
+                float c = dot(pos - shape.center, pos - shape.center) - shape.radius * shape.radius;
+                
+                float D = b*b - 4.*a*c;
 
-            float t1 = (-b - sqrt(D)) / (2. * a);
-            float t2 = (-b + sqrt(D)) / (2. * a);
-            if (t1 > 0. && t1 < t2) {
-                return t1;
-            } else if (t2 > 0.) {
-                return t2;
-            } else {
-                return 0.;
+                float t1 = (-b - sqrt(D)) / (2. * a);
+                float t2 = (-b + sqrt(D)) / (2. * a);
+                if (t1 > 0. && t1 < t2) {
+                    return t1;
+                } else if (t2 > 0.) {
+                    return t2;
+                } else {
+                    return 0.;
+                }
+            } else if (shape.shape == PLANE) { // shape is plane
+                // solve:
+                // n * (tv + p) = n * c
+                // t = (n * (c - p))/(n * v)
+                float t = dot(shape.normal, shape.center - pos) / dot(shape.normal, ray);
+                if (t > 0.) {
+                    return t;
+                } else {
+                    return 0.;
+                }
             }
         }
         
@@ -73,7 +90,11 @@ function makeFragmentShader(scene: Scene): string {
                 }
             }
             i_pos = pos + t * ray;
-            normal = normalize(i_pos - shape.center);
+            if (shape.shape == SPHERE) {
+                normal = normalize(i_pos - shape.center);
+            } else if (shape.shape == PLANE) {
+                normal = shape.normal;
+            }
             return t;
         }
         float cast_ray(in vec3 pos, in vec3 ray, in int exclude) {
@@ -93,7 +114,7 @@ function makeFragmentShader(scene: Scene): string {
             vec3 color = vec3(0, 0, 0);
 
             // amount to reduce reflection by (product of each shape's reflectivity)
-            float reflection_factor = 1.;
+            vec3 reflection_factor = vec3(1, 1, 1);
 
             // do not include the current shape in casting rays
             // this means we can't have self-reflections, but shapes are convex so it doesn't matter
@@ -116,11 +137,21 @@ function makeFragmentShader(scene: Scene): string {
                     if (cast_ray(hit_pos, shadow_ray, idx) <= 0.) {
                         float diff = dot(normal, shadow_ray);
                         if (diff > 0.) {
-                            vec3 diffuse = shape.diffuse * diff;
+                            // checkerboard pattern
+                            float checker = 1.;
+                            bool cx = mod(hit_pos.x, 2.) < 1.;
+                            bool cy = mod(hit_pos.z, 2.) < 1.;
+                            if (shape.shape == PLANE && !(cx && cy) && (cx || cy)) {
+                                checker = .5;
+                            }
+                            vec3 diffuse = checker * shape.diffuse * diff;
     
-                            // needed to calculate both specular and reflection
+                            // old, busted: blinn specular
                             float shine = dot(reflection_ray, shadow_ray);
-                            vec3 specular = shine > 0. ? pow(shine, shape.shininess) * vec3(1, 1, 1) : vec3(0, 0, 0);
+                            vec3 specular = shine > 0. ? pow(shine, shape.shininess) * shape.specular : vec3(0, 0, 0);
+
+                            // new hotness: cook-torrance specular
+
                             lighting = diffuse + specular;
                         }
                     }
@@ -207,13 +238,23 @@ export default class WebGLRenderer implements Renderer {
 
         for (let i = 0; i < scene.shapes.length; i++) {
             let shape = scene.shapes[i];
-            uniformStruct(gl, program, `u_shapes[${i}]`, {
-                center: shape.center,
-                radius: shape.radius,
+            let struct: Struct = {
                 diffuse: shape.diffuse,
+                specular: shape.specular,
                 shininess: shape.shininess,
                 reflectivity: shape.reflectivity,
-            })
+            }
+            if (shape.shape == "Ball") {
+                struct.shape = {int: 0};
+                struct.center = shape.center;
+                struct.radius = shape.radius;
+            } else if (shape.shape == "Plane") {
+                struct.shape = {int: 1};
+                struct.center = shape.center;
+                struct.normal = shape.normal;
+            }
+            console.log(struct);
+            uniformStruct(gl, program, `u_shapes[${i}]`, struct);
         }
 
         gl.drawArrays(gl.TRIANGLE_STRIP,0, 4);

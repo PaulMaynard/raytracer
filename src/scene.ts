@@ -14,12 +14,17 @@ export interface Ball {
     center: Point;
     radius: number;
 }
+export interface Plane {
+    shape: "Plane";
+    center: Point;
+    normal: Point;
+}
 
 export interface Material {
     diffuse: Color;
     shininess: number;
-    // specular: Color;
-    reflectivity: number;
+    specular: Color;
+    reflectivity: Color;
 }
 
-export type Shape = Ball & Material;
+export type Shape = (Ball | Plane) & Material;
