@@ -6,7 +6,7 @@ export interface Scene {
     camera: Ray;
     light: Point;
     background: Color;
-    shapes: Shape[]
+    shapes: Shape[];
 }
 
 export interface Ball {
@@ -22,9 +22,9 @@ export interface Plane {
 
 export interface Material {
     diffuse: Color;
-    shininess: number;
     specular: Color;
-    reflectivity: Color;
+    reflectivity: number;
+    roughness: number;
 }
 
 export type Shape = (Ball | Plane) & Material;

@@ -1,11 +1,12 @@
 import WebGLRenderer from "./webglrenderer.js"
 import { Renderer } from "./renderer.js";
-import { Scene, Shape } from "./scene.js";
+import { Scene } from "./scene.js";
+import { sub, norm } from "./point.js"; 
 
 let scene: Scene = {
     iterations: 10,
     camera: [
-        [0, 0, -1],
+        [0, 0, -5],
         [0, 0, 1]
     ],
     background: [0, 0, 0],
@@ -13,30 +14,30 @@ let scene: Scene = {
     shapes: [
         {
             shape: "Ball",
-            center: [0, 0, 4],
+            center: [0, 0, 0],
             radius: 2,
-            diffuse: [0, 0.15, 0],
-            shininess: 200,
-            specular: [1, 1, 1],
-            reflectivity: [0.4, 0.6, 0.6],
+            diffuse: [0, 0.1, 0],
+            roughness: .1,
+            specular: [.9, .9, .9],
+            reflectivity: 0.9,
         },
         {
             shape: "Ball",
-            center: [-1, -1, 2],
+            center: [-1, -1, -2],
             radius: .8,
-            diffuse: [.15, 0, 0],
-            shininess: 200,
-            specular: [1, 1, 1],
-            reflectivity: [0.6, 0.4, 0.4],
+            diffuse: [.1, 0, 0],
+            roughness: .5,
+            specular: [.9, .9, .9],
+            reflectivity: 0.5,
         },
         {
             shape: "Ball",
-            center: [1, .2, 1],
+            center: [1, .2, -3],
             radius: .5,
-            diffuse: [0, 0, .15],
-            shininess: 200,
-            specular: [1, 1, 1],
-            reflectivity: [0.4, 0.4, 0.6],
+            diffuse: [0, 0, .6],
+            roughness: .9,
+            specular: [.4, .4, .4],
+            reflectivity: 0.2,
         },
         {
             shape: "Plane",
@@ -44,8 +45,8 @@ let scene: Scene = {
             normal: [0, 1, 0],
             diffuse: [.5, .5, .5],
             specular: [.1, .1, .1],
-            shininess: 1,
-            reflectivity: [0.4, 0.4, 0.4],
+            roughness: 0.9,
+            reflectivity: 0.1,
         }
     ],
 }
@@ -58,6 +59,19 @@ let scene: Scene = {
 
 let renderer2: Renderer = new WebGLRenderer(600, 600);
 document.body.appendChild(renderer2.canvas);
-let time = Date.now();
-renderer2.render(scene);
-console.log("WebGL rendered in: " + (Date.now() - time) + "ms");
+// let time = Date.now();
+
+let start: number = null;
+function animate(time: number) {
+    if (start == null) {
+        start = time;
+    }
+    time = time - start;
+    scene.camera[0][0] = 5 * Math.sin(time / 4000);
+    scene.camera[0][2] = -5 * Math.cos(time / 4000);
+    scene.camera[1] = norm(sub([0, 0, 0], scene.camera[0]));
+    renderer2.render(scene);
+    requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+// console.log("WebGL rendered in: " + (Date.now() - time) + "ms");

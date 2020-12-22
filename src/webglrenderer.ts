@@ -18,156 +18,182 @@ const vertexShader = glsl`
         gl_Position = a_position;
     }
 `;
-function makeFragmentShader(scene: Scene): string {
-    return glsl`
-        precision mediump float;
+let cached_length: number = -1;
+let cached_shader: WebGLShader = null;
+function makeFragmentShader(gl: WebGLRenderingContext, scene: Scene): WebGLShader {
+    if (cached_shader == null || cached_length != scene.shapes.length) {
+        // we need to make a new shader
+        cached_length = scene.shapes.length;
+        cached_shader = createShader(gl, gl.FRAGMENT_SHADER, glsl`
+            precision mediump float;
 
-        varying vec3 v_ray;
+            #define PI 3.1415926
 
-        uniform vec3 u_camera;
-        uniform vec3 u_light;
+            varying vec3 v_ray;
 
-        #define SPHERE 0
-        #define PLANE 1
-        uniform struct Shape {
-            int shape;
-            vec3 center;
-            float radius;
-            vec3 normal;
-            vec3 diffuse;
-            vec3 specular;
-            vec3 reflectivity;
-            float shininess;
-        } u_shapes[${scene.shapes.length}];
+            uniform vec3 u_camera;
+            uniform vec3 u_light;
+
+            #define SPHERE 0
+            #define PLANE 1
+            uniform struct Shape {
+                int shape;
+                vec3 center;
+                float radius;
+                vec3 normal;
+                vec3 diffuse;
+                vec3 specular;
+                float reflectivity;
+                float roughness;
+            } u_shapes[${scene.shapes.length}];
 
 
-        float intersection(in vec3 pos, in vec3 ray, in Shape shape) {
-            if (shape.shape == SPHERE) {
-                // solve quadratic formula for intersection
-                // solve for t
-                // |tv + p - c|^2 = r^2
-                // |v^2|t^2 + 2((p - c) * v)t + |p - c|^2 - r^2 = 0
+            float intersection(in vec3 pos, in vec3 ray, in Shape shape) {
+                if (shape.shape == SPHERE) {
+                    // solve quadratic formula for intersection
+                    // solve for t
+                    // |tv + p - c|^2 = r^2
+                    // |v^2|t^2 + 2((p - c) * v)t + |p - c|^2 - r^2 = 0
 
-                float a = dot(ray, ray);
-                float b = 2. * dot(pos - shape.center, ray);
-                float c = dot(pos - shape.center, pos - shape.center) - shape.radius * shape.radius;
-                
-                float D = b*b - 4.*a*c;
+                    float a = dot(ray, ray);
+                    float b = 2. * dot(pos - shape.center, ray);
+                    float c = dot(pos - shape.center, pos - shape.center) - shape.radius * shape.radius;
+                    
+                    float D = b*b - 4.*a*c;
 
-                float t1 = (-b - sqrt(D)) / (2. * a);
-                float t2 = (-b + sqrt(D)) / (2. * a);
-                if (t1 > 0. && t1 < t2) {
-                    return t1;
-                } else if (t2 > 0.) {
-                    return t2;
-                } else {
-                    return 0.;
-                }
-            } else if (shape.shape == PLANE) { // shape is plane
-                // solve:
-                // n * (tv + p) = n * c
-                // t = (n * (c - p))/(n * v)
-                float t = dot(shape.normal, shape.center - pos) / dot(shape.normal, ray);
-                if (t > 0.) {
-                    return t;
-                } else {
-                    return 0.;
-                }
-            }
-        }
-        
-        float cast_ray(in vec3 pos, in vec3 ray, in int exclude, out Shape shape, out int idx, out vec3 i_pos, out vec3 normal) {
-            float t = 0.;
-                
-            for (int i = 0; i < ${scene.shapes.length}; i++) {
-                if (i != exclude) {
-                    float t_i = intersection(pos, ray, u_shapes[i]);
-                    if (t_i > 0. && (t == 0. || t_i < t)) {
-                        t = t_i;
-                        shape = u_shapes[i];
-                        idx = i;
+                    float t1 = (-b - sqrt(D)) / (2. * a);
+                    float t2 = (-b + sqrt(D)) / (2. * a);
+                    if (t1 > 0. && t1 < t2) {
+                        return t1;
+                    } else if (t2 > 0.) {
+                        return t2;
+                    } else {
+                        return 0.;
+                    }
+                } else if (shape.shape == PLANE) { // shape is plane
+                    // solve:
+                    // n * (tv + p) = n * c
+                    // t = (n * (c - p))/(n * v)
+                    float t = dot(shape.normal, shape.center - pos) / dot(shape.normal, ray);
+                    if (t > 0.) {
+                        return t;
+                    } else {
+                        return 0.;
                     }
                 }
             }
-            i_pos = pos + t * ray;
-            if (shape.shape == SPHERE) {
-                normal = normalize(i_pos - shape.center);
-            } else if (shape.shape == PLANE) {
-                normal = shape.normal;
-            }
-            return t;
-        }
-        float cast_ray(in vec3 pos, in vec3 ray, in int exclude) {
-            vec3 i_pos;
-            vec3 normal;
-            Shape shape;
-            int idx;
-            return cast_ray(pos, ray, exclude, shape, idx, i_pos, normal);
-        }
-
-        void main() {
-            // ray currently being cast. Gets updated in the loop for reflection rays
-            vec3 pos = u_camera;
-            vec3 ray = normalize(v_ray); // set up camera grid
-
-            // cumulative color of pixel, made up of contributions of each bounce
-            vec3 color = vec3(0, 0, 0);
-
-            // amount to reduce reflection by (product of each shape's reflectivity)
-            vec3 reflection_factor = vec3(1, 1, 1);
-
-            // do not include the current shape in casting rays
-            // this means we can't have self-reflections, but shapes are convex so it doesn't matter
-            int exclude = -1;
-
-            // do some number of times for reflections
-            for (int i = 0; i < ${scene.iterations}; i++) {
-                // cast the ray and see if it hits anything
-                Shape shape;
-                int idx;
-                vec3 hit_pos;
-                vec3 normal;
-                float t = cast_ray(pos, ray, exclude, shape, idx, hit_pos, normal);
-                if (t > 0.) { // ray hit shape
-                    vec3 lighting = vec3(0, 0, 0);
-                    vec3 shadow_ray = normalize(u_light - hit_pos);
-                    vec3 reflection_ray = ray - 2. * dot(ray, normal) * normal;
-
-                    // excude the current shape from shadow calcs to avoid shadow acne
-                    if (cast_ray(hit_pos, shadow_ray, idx) <= 0.) {
-                        float diff = dot(normal, shadow_ray);
-                        if (diff > 0.) {
-                            // checkerboard pattern
-                            float checker = 1.;
-                            bool cx = mod(hit_pos.x, 2.) < 1.;
-                            bool cy = mod(hit_pos.z, 2.) < 1.;
-                            if (shape.shape == PLANE && !(cx && cy) && (cx || cy)) {
-                                checker = .5;
-                            }
-                            vec3 diffuse = checker * shape.diffuse * diff;
-    
-                            // old, busted: blinn specular
-                            float shine = dot(reflection_ray, shadow_ray);
-                            vec3 specular = shine > 0. ? pow(shine, shape.shininess) * shape.specular : vec3(0, 0, 0);
-
-                            // new hotness: cook-torrance specular
-
-                            lighting = diffuse + specular;
+            
+            float cast_ray(in vec3 pos, in vec3 ray, in int exclude, out Shape shape, out int idx, out vec3 i_pos, out vec3 normal) {
+                float t = 0.;
+                    
+                for (int i = 0; i < ${scene.shapes.length}; i++) {
+                    if (i != exclude) {
+                        float t_i = intersection(pos, ray, u_shapes[i]);
+                        if (t_i > 0. && (t == 0. || t_i < t)) {
+                            t = t_i;
+                            shape = u_shapes[i];
+                            idx = i;
                         }
                     }
-                    color += reflection_factor * lighting;
-                    // set up for the next iteration to do reflection calculations:
-                    reflection_factor *= shape.reflectivity;
-                    pos = hit_pos;
-                    ray = reflection_ray;
-                    exclude = idx;
-                } else {
-                    break; // no shape hit, end loop (doesn't really end because of unrolling but whatever)
                 }
+                i_pos = pos + t * ray;
+                if (shape.shape == SPHERE) {
+                    normal = normalize(i_pos - shape.center);
+                } else if (shape.shape == PLANE) {
+                    normal = shape.normal;
+                }
+                return t;
             }
-            gl_FragColor = vec4(color, 1);
-        }
-    `;
+            float cast_ray(in vec3 pos, in vec3 ray, in int exclude) {
+                vec3 i_pos;
+                vec3 normal;
+                Shape shape;
+                int idx;
+                return cast_ray(pos, ray, exclude, shape, idx, i_pos, normal);
+            }
+
+            void main() {
+                // ray currently being cast. Gets updated in the loop for reflection rays
+                vec3 pos = u_camera;
+                vec3 ray = normalize(v_ray); // set up camera grid
+
+                // cumulative color of pixel, made up of contributions of each bounce
+                vec3 color = vec3(0, 0, 0);
+
+                // amount to reduce reflection by (product of each shape's reflectivity)
+                vec3 reflection_factor = vec3(1, 1, 1);
+
+                // do not include the current shape in casting rays
+                // this means we can't have self-reflections, but shapes are convex so it doesn't matter
+                int exclude = -1;
+
+                // do some number of times for reflections
+                for (int i = 0; i < ${scene.iterations}; i++) {
+                    // cast the ray and see if it hits anything
+                    Shape shape;
+                    int idx;
+                    vec3 hit_pos;
+                    vec3 normal;
+                    float t = cast_ray(pos, ray, exclude, shape, idx, hit_pos, normal);
+                    if (t > 0.) { // ray hit shape
+                        vec3 lighting = vec3(0, 0, 0);
+                        vec3 shadow_ray = normalize(u_light - hit_pos);
+                        vec3 reflection_ray = ray - 2. * dot(ray, normal) * normal;
+
+                        // excude the current shape from shadow calcs to avoid shadow acne
+                        if (cast_ray(hit_pos, shadow_ray, idx) <= 0.) {
+                            float lambert = dot(normal, shadow_ray);
+                            if (lambert > 0.) {
+                                // checkerboard pattern
+                                float checker = 1.;
+                                bool cx = mod(hit_pos.x, 2.) < 1.;
+                                bool cy = mod(hit_pos.z, 2.) < 1.;
+                                if (shape.shape == PLANE && !(cx && cy) && (cx || cy)) {
+                                    checker = .5;
+                                }
+                                vec3 diffuse = checker * shape.diffuse * lambert;
+        
+                                // old, busted: blinn specular
+                                // float shine = dot(reflection_ray, shadow_ray);
+                                // vec3 specular = shine > 0. ? pow(shine, shape.shininess) * shape.specular : vec3(0, 0, 0);
+
+                                // new hotness: cook-torrance specular
+                                vec3 halfway = normalize(normalize(shadow_ray) - normalize(ray));
+
+                                float alpha2 = pow(shape.roughness, 4.);
+                                float shine = dot(halfway, normal);
+                                float distribution = shine > 0. ? pow(shine, 2./alpha2 - 2.) / (alpha2 * PI) : 0.;
+
+                                float attenuation = min(
+                                    1.,
+                                    min(
+                                        dot(normal, -ray),
+                                        dot(normal, shadow_ray)
+                                    ) * 2. * shine / dot(-ray, halfway)
+                                );
+
+                                // schlicks approximation
+                                float fresnel = shape.reflectivity + (1. - shape.reflectivity) * pow(1. + dot(ray, halfway), 5.);
+
+                                lighting = diffuse + shape.specular * distribution * attenuation * fresnel / (4. * dot(-ray, normal));
+                            }
+                        }
+                        color += reflection_factor * lighting;
+                        // set up for the next iteration to do reflection calculations:
+                        // use fresnel for the reflection
+                        reflection_factor *= shape.reflectivity + (1. - shape.reflectivity) * pow(1. - 2. * dot(ray, normal) * dot(ray, normal), 5.);
+                        pos = hit_pos;
+                        ray = reflection_ray;
+                        exclude = idx;
+                    } else {
+                        break; // no shape hit, end loop (doesn't really end because of unrolling but whatever)
+                    }
+                }
+                gl_FragColor = vec4(color, 1);
+            }
+        `);
+    }
+    return cached_shader;
 }
 
 const vertices = new Float32Array([
@@ -191,7 +217,7 @@ export default class WebGLRenderer implements Renderer {
     }
     public render(scene: Scene) {
         const gl = this.gl;
-        let fragment = createShader(gl, gl.FRAGMENT_SHADER, makeFragmentShader(scene));
+        let fragment = makeFragmentShader(gl, scene);
         let program = createProgram(gl, this.vertex, fragment);
 
         // boilerplate setup
@@ -241,7 +267,7 @@ export default class WebGLRenderer implements Renderer {
             let struct: Struct = {
                 diffuse: shape.diffuse,
                 specular: shape.specular,
-                shininess: shape.shininess,
+                roughness: shape.roughness,
                 reflectivity: shape.reflectivity,
             }
             if (shape.shape == "Ball") {
@@ -253,10 +279,11 @@ export default class WebGLRenderer implements Renderer {
                 struct.center = shape.center;
                 struct.normal = shape.normal;
             }
-            console.log(struct);
             uniformStruct(gl, program, `u_shapes[${i}]`, struct);
         }
 
+        let time = Date.now();
         gl.drawArrays(gl.TRIANGLE_STRIP,0, 4);
+        console.log("Shader code run in " + (Date.now() - time) + "ms")
     }
 }
