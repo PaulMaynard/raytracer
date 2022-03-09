@@ -224,9 +224,9 @@ export default class WebGLRenderer implements Renderer {
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         gl.clearColor(0, 0, 0, 0);
         gl.clear(gl.COLOR_BUFFER_BIT);
-        
+
         gl.useProgram(program);
-        
+
         var positionBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
@@ -271,19 +271,19 @@ export default class WebGLRenderer implements Renderer {
                 reflectivity: shape.reflectivity,
             }
             if (shape.shape == "Ball") {
-                struct.shape = {int: 0};
+                struct.shape = { int: 0 };
                 struct.center = shape.center;
                 struct.radius = shape.radius;
             } else if (shape.shape == "Plane") {
-                struct.shape = {int: 1};
+                struct.shape = { int: 1 };
                 struct.center = shape.center;
                 struct.normal = shape.normal;
             }
             uniformStruct(gl, program, `u_shapes[${i}]`, struct);
         }
 
-        let time = Date.now();
-        gl.drawArrays(gl.TRIANGLE_STRIP,0, 4);
-        console.log("Shader code run in " + (Date.now() - time) + "ms")
+        // let time = Date.now();
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        // console.log("Shader code run in " + (Date.now() - time) + "ms")
     }
 }

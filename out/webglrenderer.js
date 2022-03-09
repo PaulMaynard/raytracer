@@ -265,9 +265,9 @@ export default class WebGLRenderer {
             }
             uniformStruct(gl, program, `u_shapes[${i}]`, struct);
         }
-        let time = Date.now();
+        // let time = Date.now();
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        console.log("Shader code run in " + (Date.now() - time) + "ms");
+        // console.log("Shader code run in " + (Date.now() - time) + "ms")
     }
 }
 //# sourceMappingURL=webglrenderer.js.map
